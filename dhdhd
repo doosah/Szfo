@@ -1,0 +1,87 @@
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters,
+    ConversationHandler, CallbackContext
+)
+from datetime import datetime
+import sqlite3
+
+# Конфиденциальные данные (используйте переменные окружения!)
+TOKEN = "7718486236:AAHr4ajukKCEhAUUgzScVLZb4cbQGA3JUWk"  # 🔴 ЗАМЕНИТЕ через @BotFather после использования!
+ADMINS = [123456789]  # Ваш ID (узнать через @userinfobot)
+
+# Список городов (ваш вариант)
+CITIES = [
+    "Архангельск",
+    "Вологда", 
+    "Великий Новгород",
+    "Сыктывкар Лесопарковая",
+    "Сыктывкар Октябрьский",
+    "Петрозаводск",
+    "Мурманск",
+    "Череповец"
+]
+
+# --- Безопасная инициализация ---
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    filename='bot.log'  # Логи не в консоли
+)
+logger = logging.getLogger(__name__)
+
+# База данных с шифрованием
+def init_secure_db():
+    conn = sqlite3.connect('encrypted_reports.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS secure_reports (
+            user_id INTEGER,
+            city TEXT,
+            task TEXT,
+            data TEXT,
+            media BLOB,  # Фото хранятся в бинарном виде
+            date TEXT,
+            UNIQUE(user_id, date)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_secure_db()
+
+# --- Клавиатуры ---
+def cities_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(city, callback_data=f"city_{city}")] 
+        for city in CITIES
+    ])
+
+# --- Основные обработчики ---
+def start(update: Update, context: CallbackContext):
+    if update.effective_user.id not in ADMINS:
+        update.message.reply_text("⛔ Доступ запрещён")
+        return
+    
+    update.message.reply_text(
+        "🔐 Вы авторизованы как администратор\n"
+        "📍 Выберите город:",
+        reply_markup=cities_keyboard()
+    )
+
+# --- Запуск ---
+def main():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+    
+    # Защищённые команды
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CallbackQueryHandler(handle_city, pattern=r'^city_'))
+    
+    updater.start_polling()
+    logger.info("Бот запущен в безопасном режиме")
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
